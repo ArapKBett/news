@@ -14,38 +14,46 @@ class NewsFetcher:
             "apiKey": self.api_key,
             "language": "en",
             "sortBy": "publishedAt",
-            "pageSize": 5  # Fetch 5 articles per topic
+            "pageSize": 5
         }
-        async with aiohttp.ClientSession() as session:
-            try:
+        
+        try:
+            async with aiohttp.ClientSession() as session:
                 async with session.get(self.base_url, params=params) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data.get("articles", [])
-                    else:
-                        print(f"Error fetching {topic} news: {response.status}")
+                    data = await response.json()
+                    
+                    if response.status != 200 or data.get("status") != "ok":
+                        error_msg = data.get("message", "Unknown error")
+                        print(f"News API error ({topic}): {error_msg}")
                         return []
-            except Exception as e:
-                print(f"Exception fetching {topic} news: {e}")
-                return []
+                        
+                    return data.get("articles", [])
+                    
+        except aiohttp.ClientError as e:
+            print(f"HTTP error ({topic}): {e}")
+            return []
+        except Exception as e:
+            print(f"Unexpected error ({topic}): {e}")
+            return []
 
     async def get_all_news(self):
-        news_by_topic = {}
-        for topic in self.topics:
-            articles = await self.fetch_news(topic)
-            news_by_topic[topic] = articles
-        return news_by_topic
+        tasks = [self.fetch_news(topic) for topic in self.topics]
+        results = await asyncio.gather(*tasks)
+        return dict(zip(self.topics, results))
 
     def format_news(self, news_by_topic):
         formatted_messages = []
         for topic, articles in news_by_topic.items():
             if not articles:
                 continue
-            message = f"📰 *Latest {topic.capitalize()} News*\n\n"
-            for article in articles:
-                title = article.get("title", "No Title")
-                source = article.get("source", {}).get("name", "Unknown")
-                url = article.get("url", "#")
-                message += f"*{title}*\nSource: {source}\nLink: {url}\n\n"
-            formatted_messages.append(message)
+            
+            for i in range(0, len(articles), 3):
+                chunk = articles[i:i+3]
+                message = f"📰 *Latest {topic.capitalize()} News*\n\n"
+                for article in chunk:
+                    title = article.get("title", "No Title").replace("*", "").strip()
+                    source = article.get("source", {}).get("name", "Unknown")
+                    url = article.get("url", "#")
+                    message += f"• {title}\n   Source: {source}\n   [Read more]({url})\n\n"
+                formatted_messages.append(message)
         return formatted_messages
