@@ -1,0 +1,5 @@
+python-telegram-bot==13.7
+discord.py==2.3.2
+aiohttp==3.8.6
+schedule==1.2.0
+python-dotenv==1.0.0
